@@ -266,48 +266,30 @@
       }
     }
 
-    try {
-      // Connect to WebSockets port 8884
-      const mqttClient = mqtt.connect('wss://ab995e3f1088482993657763af4ff2d8.s1.eu.hivemq.cloud:8884/mqtt', {
-        username: HIVEMQ_USERNAME,
-        password: HIVEMQ_PASSWORD,
-        clientId: 'web-client-' + Math.random().toString(16).substring(2, 8)
-      });
+    // Connect to WebSockets port 8884
+    const mqttClient = mqtt.connect('wss://ab995e3f1088482993657763af4ff2d8.s1.eu.hivemq.cloud:8884/mqtt', {
+      username: HIVEMQ_USERNAME,
+      password: HIVEMQ_PASSWORD,
+      clientId: 'web-client-' + Math.random().toString(16).substring(2, 8)
+    });
 
-      mqttClient.on('connect', () => {
-        mqttStatusText.innerText = 'CONNECTED';
-        statusDot.classList.replace('bg-red-500', 'bg-green-500');
-        statusPing.classList.replace('bg-red-400', 'bg-green-400');
-        mqttClient.subscribe('water-treatment/water-treatment-01/telemetry');
-      });
+    mqttClient.on('connect', () => {
+      mqttStatusText.innerText = 'CONNECTED';
+      statusDot.classList.replace('bg-red-500', 'bg-green-500');
+      statusPing.classList.replace('bg-red-400', 'bg-green-400');
+      mqttClient.subscribe('water-treatment/water-treatment-01/telemetry');
+    });
 
-      mqttClient.on('error', (err) => {
-          console.error("MQTT Error: ", err);
-          mqttStatusText.innerText = 'ERROR';
-          statusDot.classList.replace('bg-green-500', 'bg-red-500');
-          statusPing.classList.replace('bg-green-400', 'bg-red-400');
-      });
+    mqttClient.on('error', (err) => {
+        console.error("MQTT Error: ", err);
+        mqttStatusText.innerText = 'ERROR / DISCONNECTED';
+        statusDot.classList.replace('bg-green-500', 'bg-red-500');
+        statusPing.classList.replace('bg-green-400', 'bg-red-400');
+    });
 
-      mqttClient.on('message', (topic, message) => {
-        handleIncomingData(JSON.parse(message.toString()));
-      });
-
-    } catch (error) {
-      console.warn("WebSocket blocked (likely in Canvas environment). Using Mock Data for Preview.");
-      mqttStatusText.innerText = 'PREVIEW MODE (MOCK)';
-      statusDot.classList.replace('bg-red-500', 'bg-yellow-500');
-      statusPing.classList.replace('bg-red-400', 'bg-yellow-400');
-      
-      // Simulate incoming MQTT data every 4 seconds for the preview environment
-      setInterval(() => {
-        handleIncomingData({
-          tds: 115 + (Math.random() * 15),
-          turbidity: 3 + (Math.random() * 2.5),
-          pump: Math.random() > 0.3,
-          mode: 'DEMO'
-        });
-      }, 4000);
-    }
+    mqttClient.on('message', (topic, message) => {
+      handleIncomingData(JSON.parse(message.toString()));
+    });
 
     async function saveHourlyData() {
       if (hourlyBuffer.length === 0) return;
