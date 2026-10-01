@@ -1,155 +1,202 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart Water Treatment - Control Panel</title>
+  <title>Smart Water Treatment Prototype</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
   <style>
-    body { font-family: 'Inter', Tahoma, sans-serif; background-color: #f3f4f6; }
+    body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
     .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
     .flow-line { height: 4px; background: #cbd5e1; flex-grow: 1; margin: 0 10px; position: relative; overflow: hidden; border-radius: 2px; }
-    .flow-line.active::after { content: ''; position: absolute; top: 0; right: -100%; width: 50%; height: 100%; background: #3b82f6; animation: flow 1.5s infinite linear; }
-    @keyframes flow { 100% { right: 100%; } }
+    .flow-line.active::after {
+      content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+      background: #3b82f6; animation: flow 1.5s infinite linear;
+    }
+    @keyframes flow { 100% { left: 100%; } }
     .tank { border-radius: 8px 8px 30px 30px; border-top: none; }
     .hidden { display: none !important; }
   </style>
 </head>
 <body class="text-gray-800">
 
-  <!-- شريط التحذير في حالة إيقاف الجهاز بسبب الأقساط -->
-  <div id="payment-warning" class="hidden bg-red-600 text-white text-center py-4 px-6 shadow-lg fixed top-0 w-full z-50">
-    <h2 class="text-2xl font-bold uppercase animate-pulse">⚠️️ النظام متوقف: لا يعمل، رجاء دفع المستحقات ⚠️</h2>
+  <!-- شريط التحذير يظهر للجميع إذا تم حظر الجهاز من قبل الأدمن -->
+  <div id="payment-warning" class="hidden bg-red-600 text-white text-center py-4 px-6 shadow-lg sticky top-0 z-50">
+    <h2 class="text-xl md:text-2xl font-bold uppercase animate-pulse" dir="rtl">⚠️ النظام متوقف: لا يعمل، رجاء دفع المستحقات ⚠️</h2>
   </div>
 
-  <header class="bg-blue-800 text-white shadow-lg p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-center mt-12 sm:mt-0" id="main-header">
-    <h1 class="text-2xl font-bold tracking-wide text-center sm:text-right mb-2 sm:mb-0">لوحة تحكم معالجة المياه</h1>
-    <div class="flex items-center space-x-2 space-x-reverse bg-blue-900 px-4 py-2 rounded-full shadow-inner">
+  <header class="bg-blue-700 text-white shadow-lg p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-center" id="main-header">
+    <h1 class="text-2xl font-bold tracking-wide text-center sm:text-left mb-2 sm:mb-0">Water Treatment Dashboard</h1>
+    <div class="flex items-center space-x-2 bg-blue-800 px-4 py-2 rounded-full shadow-inner">
       <span class="relative flex h-3 w-3">
         <span id="status-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
         <span id="status-dot" class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
       </span>
-      <span class="text-sm font-medium mr-2">الاتصال: <span id="mqtt-status">جاري الاتصال...</span></span>
+      <span class="text-sm font-medium">
+        <!-- تم تحويل كلمة HiveMQ لزر مخفي -->
+        <span id="secret-admin-trigger" class="cursor-default select-none">HiveMQ</span>: <span id="mqtt-status">Connecting...</span>
+      </span>
     </div>
   </header>
 
   <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6 mt-4">
     
-    <!-- القراءات الحية -->
+    <!-- Live Sensors -->
     <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="glass-card p-6 rounded-xl shadow-md border border-gray-100 flex flex-col items-center justify-center text-center">
-        <p class="text-gray-500 text-sm font-semibold uppercase mb-2">TDS</p>
+      <div class="glass-card p-6 rounded-xl shadow-md border border-gray-100 flex flex-col items-center justify-center text-center transition-transform hover:scale-105">
+        <p class="text-gray-500 text-sm font-semibold uppercase tracking-wider mb-2">TDS</p>
         <p class="text-3xl font-bold text-blue-600"><span id="tds-val">--</span> <span class="text-lg text-gray-400">ppm</span></p>
       </div>
-      <div class="glass-card p-6 rounded-xl shadow-md border border-gray-100 flex flex-col items-center justify-center text-center">
-        <p class="text-gray-500 text-sm font-semibold uppercase mb-2">العكارة</p>
+      <div class="glass-card p-6 rounded-xl shadow-md border border-gray-100 flex flex-col items-center justify-center text-center transition-transform hover:scale-105">
+        <p class="text-gray-500 text-sm font-semibold uppercase tracking-wider mb-2">Turbidity</p>
         <p class="text-3xl font-bold text-blue-600"><span id="turb-val">--</span> <span class="text-lg text-gray-400">NTU</span></p>
       </div>
-      <div class="glass-card p-6 rounded-xl shadow-md border border-gray-100 flex flex-col items-center justify-center text-center">
-        <p class="text-gray-500 text-sm font-semibold uppercase mb-2">حالة المضخة</p>
+      <div class="glass-card p-6 rounded-xl shadow-md border border-gray-100 flex flex-col items-center justify-center text-center transition-transform hover:scale-105">
+        <p class="text-gray-500 text-sm font-semibold uppercase tracking-wider mb-2">Pump Status</p>
         <p id="pump-val" class="text-2xl font-bold text-gray-700">--</p>
       </div>
-      <div class="glass-card p-6 rounded-xl shadow-md border border-gray-100 flex flex-col items-center justify-center text-center">
-        <p class="text-gray-500 text-sm font-semibold uppercase mb-2">وضع التشغيل</p>
-        <p id="mode-val" class="text-xl font-bold text-gray-700">--</p>
+      <div class="glass-card p-6 rounded-xl shadow-md border border-gray-100 flex flex-col items-center justify-center text-center transition-transform hover:scale-105">
+        <p class="text-gray-500 text-sm font-semibold uppercase tracking-wider mb-2">System Mode</p>
+        <p id="mode-val" class="text-2xl font-bold text-gray-700">--</p>
       </div>
     </section>
 
-    <!-- الرسم التوضيحي -->
+    <!-- Treatment Process -->
     <section class="glass-card p-6 rounded-xl shadow-md border border-gray-100">
-      <h3 class="text-lg font-bold text-gray-800 mb-6 border-b pb-2">عملية المعالجة الحية</h3>
-      <div class="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 w-full px-4 overflow-x-auto py-4" dir="ltr">
+      <h3 class="text-lg font-bold text-gray-800 mb-6 border-b pb-2">Treatment Process</h3>
+      <div class="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 w-full px-4 overflow-x-auto py-4">
         <div class="flex flex-col items-center shrink-0">
-          <div class="tank w-16 h-20 bg-blue-100 border-4 border-blue-300 flex items-end justify-center pb-2 relative"><div class="w-full bg-blue-400 absolute bottom-0 rounded-b-2xl h-1/2 opacity-50"></div></div>
+          <div class="tank w-16 h-20 bg-blue-100 border-4 border-blue-300 flex items-end justify-center pb-2 relative">
+            <div class="w-full bg-blue-400 absolute bottom-0 rounded-b-2xl h-1/2 opacity-50"></div>
+          </div>
           <span class="text-xs font-bold mt-2">Input Tank</span>
         </div>
         <div class="hidden sm:block flow-line"></div>
         <div class="flex flex-col items-center shrink-0">
-          <div id="vis-pump" class="w-14 h-14 rounded-full bg-gray-300 border-4 border-gray-400 flex items-center justify-center text-xs font-bold transition-colors duration-300">PUMP</div>
+          <div id="vis-pump" class="w-14 h-14 rounded-full bg-gray-300 border-4 border-gray-400 flex items-center justify-center text-xs font-bold shadow-inner transition-colors duration-300">PUMP</div>
         </div>
-        <div class="hidden sm:block flow-line"></div>
-        <div class="flex flex-col items-center shrink-0"><div class="w-12 h-24 bg-gray-100 border-2 border-gray-400 rounded relative"><span class="text-xs font-bold z-10 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">ST 1</span></div></div>
-        <div class="hidden sm:block flow-line"></div>
-        <div class="flex flex-col items-center shrink-0"><div class="w-12 h-24 bg-gray-100 border-2 border-gray-400 rounded relative"><span class="text-xs font-bold z-10 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">ST 2</span></div></div>
-        <div class="hidden sm:block flow-line"></div>
-        <div class="flex flex-col items-center shrink-0"><div class="w-12 h-24 bg-gray-100 border-2 border-gray-400 rounded relative"><span class="text-xs font-bold z-10 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">ST 3</span></div></div>
         <div class="hidden sm:block flow-line"></div>
         <div class="flex flex-col items-center shrink-0">
-          <div class="tank w-16 h-20 bg-blue-50 border-4 border-blue-200 flex items-end justify-center pb-2 relative"><div class="w-full bg-blue-300 absolute bottom-0 rounded-b-2xl h-3/4 opacity-50"></div></div>
-          <span class="text-xs font-bold mt-2">Output Tank</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- الرسوم البيانية -->
-    <section class="glass-card p-6 rounded-xl shadow-md border border-gray-100">
-      <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">رسم بياني مباشر</h3>
-      <div class="w-full h-64"><canvas id="qualityChart"></canvas></div>
-    </section>
-
-    <!-- لوحة تحكم الأدمن (تسجيل الدخول / التحكم) -->
-    <section class="bg-gray-800 text-white p-6 rounded-xl shadow-2xl border-t-4 border-red-500 mt-8">
-      <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2 flex items-center">
-        <svg class="w-6 h-6 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-        إدارة النظام (المدير فقط)
-      </h3>
-
-      <!-- فورم تسجيل الدخول للأدمن -->
-      <div id="admin-login-section" class="max-w-sm mx-auto bg-gray-700 p-6 rounded-lg shadow-inner">
-        <p class="text-sm text-gray-300 mb-4 text-center">يرجى تسجيل الدخول للتحكم في المضخة والأقساط.</p>
-        <input type="email" id="admin-email" placeholder="البريد الإلكتروني" class="w-full p-2 mb-3 rounded text-gray-900 border-none focus:ring-2 focus:ring-blue-500" dir="ltr">
-        <input type="password" id="admin-password" placeholder="كلمة المرور" class="w-full p-2 mb-4 rounded text-gray-900 border-none focus:ring-2 focus:ring-blue-500" dir="ltr">
-        <button id="btn-login" class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-2 px-4 rounded transition-colors">تسجيل الدخول</button>
-        <p id="login-error" class="text-red-400 text-sm mt-2 hidden text-center"></p>
-      </div>
-
-      <!-- أزرار تحكم الأدمن (مخفية حتى يتم تسجيل الدخول) -->
-      <div id="admin-controls-section" class="hidden">
-        <div class="flex justify-between items-center mb-6 bg-gray-700 p-3 rounded">
-          <span class="text-green-400 font-bold text-sm">✅ تم تسجيل الدخول كمدير النظام</span>
-          <button id="btn-logout" class="text-xs bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded">تسجيل الخروج</button>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- تحكم المضخة -->
-          <div class="bg-gray-700 p-4 rounded-lg">
-            <h4 class="font-bold text-gray-300 mb-3">التحكم اليدوي بالمضخة:</h4>
-            <div class="flex space-x-2 space-x-reverse">
-              <button onclick="sendControl('ON')" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded">تشغيل إجباري</button>
-              <button onclick="sendControl('OFF')" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded">إيقاف إجباري</button>
-              <button onclick="sendControl('AUTO')" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded">أوتوماتيك (30ث/30د)</button>
-            </div>
-          </div>
-          
-          <!-- تحكم الأقساط (نظام الأمان) -->
-          <div class="bg-gray-700 p-4 rounded-lg border border-red-500">
-            <h4 class="font-bold text-red-400 mb-3">نظام الحظر (الأقساط):</h4>
-            <div class="flex space-x-2 space-x-reverse">
-              <button onclick="sendLock(true)" class="flex-1 bg-red-700 hover:bg-red-800 text-white font-bold py-2 rounded flex justify-center items-center">
-                <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
-                حظر الجهاز (لا يعمل)
-              </button>
-              <button onclick="sendLock(false)" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded flex justify-center items-center">
-                <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2H7V7a3 3 0 015.905-.75 1 1 0 001.937-.5A5.002 5.002 0 0010 2z"></path></svg>
-                فك الحظر (طبيعي)
-              </button>
-            </div>
-            <p class="text-xs text-gray-400 mt-2 text-center">أوامر الحظر يتم حفظها وستنفذ حتى لو انقطعت الكهرباء وعادت.</p>
+          <div class="w-12 h-24 bg-gray-100 border-2 border-gray-400 rounded flex flex-col justify-between items-center py-2 relative overflow-hidden">
+             <div class="w-full h-1/3 bg-gray-300 opacity-50"></div><span class="text-xs font-bold z-10 absolute top-1/2 -translate-y-1/2">ST 1</span>
           </div>
         </div>
+        <div class="hidden sm:block flow-line"></div>
+        <div class="flex flex-col items-center shrink-0">
+          <div class="w-12 h-24 bg-gray-100 border-2 border-gray-400 rounded flex flex-col justify-between items-center py-2 relative overflow-hidden">
+             <div class="w-full h-2/3 bg-gray-400 opacity-50"></div><span class="text-xs font-bold z-10 absolute top-1/2 -translate-y-1/2">ST 2</span>
+          </div>
+        </div>
+        <div class="hidden sm:block flow-line"></div>
+        <div class="flex flex-col items-center shrink-0">
+          <div class="w-12 h-24 bg-gray-100 border-2 border-gray-400 rounded flex flex-col justify-between items-center py-2 relative overflow-hidden">
+             <div class="w-full h-full bg-gray-500 opacity-50"></div><span class="text-xs font-bold z-10 absolute top-1/2 -translate-y-1/2 text-white">ST 3</span>
+          </div>
+        </div>
+        <div class="hidden sm:block flow-line"></div>
+        <div class="flex flex-col items-center shrink-0">
+          <div class="tank w-16 h-20 bg-blue-50 border-4 border-blue-200 flex items-end justify-center pb-2 relative">
+             <div class="w-full bg-blue-300 absolute bottom-0 rounded-b-2xl h-3/4 opacity-50"></div>
+          </div>
+          <span class="text-xs font-bold mt-2 text-center">Output Tank</span>
+        </div>
       </div>
     </section>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Chart -->
+      <section class="glass-card p-6 rounded-xl shadow-md border border-gray-100 lg:col-span-2">
+        <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Live Sensors Chart</h3>
+        <div class="w-full h-64"><canvas id="qualityChart"></canvas></div>
+      </section>
+      
+      <!-- Lab Validation & Export -->
+      <div class="space-y-6 flex flex-col">
+        <section class="glass-card p-6 rounded-xl shadow-md border border-gray-100 flex-grow">
+          <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Laboratory Validation</h3>
+          <p class="text-sm text-gray-600 mb-4">Download our official certified lab results to view validated metrics.</p>
+          <ul class="space-y-3">
+            <li><a href="#" class="flex items-center text-blue-600 hover:text-blue-800 transition-colors"><svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"></path></svg>Before Treatment Report (PDF)</a></li>
+            <li><a href="#" class="flex items-center text-blue-600 hover:text-blue-800 transition-colors"><svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"></path></svg>After Treatment Report (PDF)</a></li>
+          </ul>
+        </section>
+        <section class="glass-card p-6 rounded-xl shadow-md border border-gray-100 flex flex-col justify-center">
+          <button id="export-csv" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors flex items-center justify-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>Export Historical Data
+          </button>
+        </section>
+      </div>
+    </div>
+
+    <!-- نافذة لوحة تحكم الأدمن المخفية (تظهر كـ Popup فوق الموقع) -->
+    <div id="admin-modal" class="hidden fixed inset-0 z-[100] bg-black/80 flex justify-center items-center p-4 backdrop-blur-sm">
+      <section class="bg-gray-900 text-white p-6 rounded-xl shadow-2xl border-t-4 border-red-500 w-full max-w-4xl relative overflow-y-auto max-h-[90vh]" id="admin-panel">
+        <!-- زر الإغلاق -->
+        <button id="close-admin-modal" class="absolute top-4 left-4 text-gray-400 hover:text-white text-3xl font-bold leading-none">&times;</button>
+        
+        <h3 class="text-xl font-bold mb-4 border-b border-gray-700 pb-2 flex items-center justify-between" dir="rtl">
+          <span class="flex items-center">
+            <svg class="w-6 h-6 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+            إدارة النظام (للمسؤولين فقط)
+          </span>
+        </h3>
+
+        <!-- فورم تسجيل الدخول للأدمن -->
+        <div id="admin-login-section" class="max-w-sm mx-auto bg-gray-800 p-6 rounded-lg shadow-inner mt-4">
+          <p class="text-sm text-gray-400 mb-4 text-center" dir="rtl">يرجى تسجيل الدخول للتحكم في المضخة والأقساط.</p>
+          <input type="email" id="admin-email" placeholder="البريد الإلكتروني" class="w-full p-3 mb-3 rounded bg-gray-700 text-white border-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400">
+          <input type="password" id="admin-password" placeholder="كلمة المرور" class="w-full p-3 mb-4 rounded bg-gray-700 text-white border-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400">
+          <button id="btn-login" class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-3 px-4 rounded transition-colors text-white">تسجيل الدخول</button>
+          <p id="login-error" class="text-red-400 text-sm mt-3 hidden text-center" dir="rtl"></p>
+        </div>
+
+        <!-- أزرار تحكم الأدمن -->
+        <div id="admin-controls-section" class="hidden mt-4" dir="rtl">
+          <div class="flex flex-col sm:flex-row justify-between items-center mb-6 bg-gray-800 p-4 rounded-lg">
+            <span class="text-green-400 font-bold text-sm mb-2 sm:mb-0">✅ تم تسجيل الدخول بصلاحيات الإدارة</span>
+            <button id="btn-logout" class="text-sm bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-white border border-gray-600 transition-colors">تسجيل الخروج</button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- تحكم المضخة -->
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+              <h4 class="font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2">التحكم اليدوي بالمضخة:</h4>
+              <div class="flex flex-col space-y-3">
+                <button onclick="sendControl('ON')" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded transition-colors">تشغيل إجباري (ON)</button>
+                <button onclick="sendControl('OFF')" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded transition-colors">إيقاف إجباري (OFF)</button>
+                <button onclick="sendControl('AUTO')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded transition-colors">الوضع الأوتوماتيكي (دورة 30ث / 30د)</button>
+              </div>
+            </div>
+            
+            <!-- تحكم الأقساط (نظام الأمان) -->
+            <div class="bg-gray-800 p-5 rounded-lg border border-red-900 bg-red-900/10">
+              <h4 class="font-bold text-red-400 mb-4 border-b border-red-900/50 pb-2">نظام الأقساط والحظر:</h4>
+              <p class="text-sm text-gray-400 mb-4">هذه الأوامر يتم حفظها في السيرفر. سينفذها الجهاز فور اتصاله بالإنترنت حتى لو انقطعت عنه الكهرباء.</p>
+              <div class="flex flex-col space-y-3">
+                <button onclick="sendLock(true)" class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded flex justify-center items-center transition-colors">
+                  <svg class="w-5 h-5 ml-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
+                  حظر الجهاز (إظهار رسالة الأقساط)
+                </button>
+                <button onclick="sendLock(false)" class="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-3 rounded flex justify-center items-center transition-colors">
+                  <svg class="w-5 h-5 ml-2" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2H7V7a3 3 0 015.905-.75 1 1 0 001.937-.5A5.002 5.002 0 0010 2z"></path></svg>
+                  فك الحظر (تشغيل طبيعي)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
 
   </main>
 
   <script type="module">
-    // استيراد مكتبات Firebase (بما فيها Authentication و Firestore)
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, serverTimestamp, getDocs, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
     import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 
     // --- 1. Firebase Initialization ---
@@ -159,159 +206,241 @@
       projectId: "tsxyz-ab19c",
       storageBucket: "tsxyz-ab19c.firebasestorage.app",
       messagingSenderId: "911831547607",
-      appId: "1:911831547607:web:c31dc9f5d120d44a933a92"
+      appId: "1:911831547607:web:c31dc9f5d120d44a933a92",
+      measurementId: "G-SRDKETV5FB"
     };
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    // --- 2. Admin Auth Logic ---
-    const loginSection = document.getElementById('admin-login-section');
-    const controlsSection = document.getElementById('admin-controls-section');
-    const loginError = document.getElementById('login-error');
-
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        loginSection.classList.add('hidden');
-        controlsSection.classList.remove('hidden');
-        fetchCurrentAdminConfig(); // جلب آخر الإعدادات المحفوظة
-      } else {
-        loginSection.classList.remove('hidden');
-        controlsSection.classList.add('hidden');
+    // --- 2. Chart.js Setup ---
+    const ctx = document.getElementById('qualityChart').getContext('2d');
+    const qualityChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'TDS (ppm)', borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', data: [], yAxisID: 'y', tension: 0.4, fill: true },
+          { label: 'Turbidity (NTU)', borderColor: '#ea580c', backgroundColor: 'rgba(234, 88, 12, 0.1)', data: [], yAxisID: 'y1', tension: 0.4, fill: true }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          y: { type: 'linear', position: 'left', title: { display: true, text: 'ppm' } },
+          y1: { type: 'linear', position: 'right', title: { display: true, text: 'NTU' }, grid: { drawOnChartArea: false } }
+        },
+        plugins: { legend: { position: 'top' } }
       }
     });
 
-    document.getElementById('btn-login').addEventListener('click', () => {
-      const email = document.getElementById('admin-email').value;
-      const pass = document.getElementById('admin-password').value;
-      signInWithEmailAndPassword(auth, email, pass).catch(err => {
-        loginError.innerText = "فشل تسجيل الدخول. تأكد من البيانات.";
-        loginError.classList.remove('hidden');
-      });
-    });
-
-    document.getElementById('btn-logout').addEventListener('click', () => signOut(auth));
-
-    // --- 3. MQTT Setup & State ---
+    // --- 3. MQTT Setup ---
     const HIVEMQ_USERNAME = "hivemq.webclient.1790796311849"; 
     const HIVEMQ_PASSWORD = "993WsaYJp2$LWH&nBMrU5zh1DzkkIGb%";
     const CONTROL_TOPIC = "water-treatment/water-treatment-01/control";
-    
-    // متغيرات حفظ الحالة للأدمن
-    let currentAdminConfig = { pump_mode: "AUTO", locked: false };
 
     const mqttClient = mqtt.connect('wss://ab995e3f1088482993657763af4ff2d8.s1.eu.hivemq.cloud:8884/mqtt', {
       username: HIVEMQ_USERNAME, password: HIVEMQ_PASSWORD,
       clientId: 'web-client-' + Math.random().toString(16).substring(2, 8)
     });
 
+    const statusDot = document.getElementById('status-dot');
+    const statusPing = document.getElementById('status-ping');
+    const mqttStatusText = document.getElementById('mqtt-status');
+
     mqttClient.on('connect', () => {
-      document.getElementById('mqtt-status').innerText = 'متصل بالإنترنت';
-      document.getElementById('status-dot').classList.replace('bg-red-500', 'bg-green-500');
-      document.getElementById('status-ping').classList.replace('bg-red-400', 'bg-green-400');
+      mqttStatusText.innerText = 'CONNECTED';
+      statusDot.classList.replace('bg-red-500', 'bg-green-500');
+      statusPing.classList.replace('bg-red-400', 'bg-green-400');
       mqttClient.subscribe('water-treatment/water-treatment-01/telemetry');
     });
 
-    mqttClient.on('error', () => {
-        document.getElementById('mqtt-status').innerText = 'مقطوع';
-        document.getElementById('status-dot').classList.replace('bg-green-500', 'bg-red-500');
+    mqttClient.on('error', (err) => {
+        mqttStatusText.innerText = 'ERROR';
+        statusDot.classList.replace('bg-green-500', 'bg-red-500');
+        statusPing.classList.replace('bg-green-400', 'bg-red-400');
     });
 
-    // --- 4. Chart & UI Updates from Device ---
-    const ctx = document.getElementById('qualityChart').getContext('2d');
-    const qualityChart = new Chart(ctx, {
-      type: 'line',
-      data: { labels: [], datasets: [
-          { label: 'TDS (ppm)', borderColor: '#2563eb', data: [], tension: 0.4 },
-          { label: 'Turbidity', borderColor: '#ea580c', data: [], tension: 0.4 }
-        ]},
-      options: { responsive: true, maintainAspectRatio: false }
-    });
+    // --- 4. Data Handling ---
+    let hourlyBuffer = [];
+    let hourStartTime = Date.now();
 
     mqttClient.on('message', (topic, message) => {
       try {
         const data = JSON.parse(message.toString());
         
-        // تحديث الواجهة
         document.getElementById('tds-val').innerText = data.tds ? data.tds.toFixed(1) : "0.0";
         document.getElementById('turb-val').innerText = data.turbidity ? data.turbidity.toFixed(1) : "0.0";
         
         const pumpVal = document.getElementById('pump-val');
-        pumpVal.innerText = data.pump ? "تعمل (ON)" : "متوقفة (OFF)";
+        pumpVal.innerText = data.pump ? "ON" : "OFF";
         pumpVal.className = data.pump ? "text-2xl font-bold text-green-600" : "text-2xl font-bold text-gray-700";
-        document.getElementById('mode-val').innerText = data.mode || "--";
-
-        // التحقق مما إذا كان الجهاز مقفلاً وعرض رسالة التحذير للزوار
+        
+        const modeVal = document.getElementById('mode-val');
+        modeVal.innerText = data.mode || "UNKNOWN";
+        modeVal.className = (data.mode && data.mode.includes('FORCE')) ? "text-2xl font-bold text-red-600" : "text-2xl font-bold text-blue-600";
+        
+        // التحقق من الحظر وعرض الرسالة للزوار
         const warningBanner = document.getElementById('payment-warning');
-        const header = document.getElementById('main-header');
         if(data.locked) {
             warningBanner.classList.remove('hidden');
-            header.classList.add('mt-12');
         } else {
             warningBanner.classList.add('hidden');
-            header.classList.remove('mt-12');
         }
-        
-        // حركة المياه
+
         const visPump = document.getElementById('vis-pump');
         const flowLines = document.querySelectorAll('.flow-line');
         if (data.pump) {
-          visPump.classList.add('bg-green-500', 'text-white');
+          visPump.classList.add('bg-green-500', 'border-green-600', 'text-white');
+          visPump.classList.remove('bg-gray-300', 'border-gray-400');
           flowLines.forEach(el => el.classList.add('active'));
         } else {
-          visPump.classList.remove('bg-green-500', 'text-white');
+          visPump.classList.remove('bg-green-500', 'border-green-600', 'text-white');
+          visPump.classList.add('bg-gray-300', 'border-gray-400');
           flowLines.forEach(el => el.classList.remove('active'));
         }
 
-        // تحديث الرسم البياني
         const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         if (qualityChart.data.labels.length > 15) {
-          qualityChart.data.labels.shift(); qualityChart.data.datasets[0].data.shift(); qualityChart.data.datasets[1].data.shift();
+          qualityChart.data.labels.shift();
+          qualityChart.data.datasets[0].data.shift();
+          qualityChart.data.datasets[1].data.shift();
         }
         qualityChart.data.labels.push(timeLabel);
         qualityChart.data.datasets[0].data.push(data.tds || 0);
         qualityChart.data.datasets[1].data.push(data.turbidity || 0);
         qualityChart.update();
 
+        hourlyBuffer.push(data);
+        if (Date.now() - hourStartTime > 3600000) saveHourlyData();
       } catch (err) {}
     });
 
-    // --- 5. Admin Control Logic ---
+    async function saveHourlyData() {
+      if (hourlyBuffer.length === 0) return;
+      const avgTds = hourlyBuffer.reduce((sum, d) => sum + (d.tds || 0), 0) / hourlyBuffer.length;
+      const avgTurb = hourlyBuffer.reduce((sum, d) => sum + (d.turbidity || 0), 0) / hourlyBuffer.length;
+      try {
+        await addDoc(collection(db, "devices/water-treatment-01/hourlyReadings"), {
+          deviceId: "water-treatment-01", tdsAverage: Number(avgTds.toFixed(2)),
+          turbidityAverage: Number(avgTurb.toFixed(2)), sampleCount: hourlyBuffer.length,
+          source: "prototype-sensor", timestamp: serverTimestamp()
+        });
+        hourlyBuffer = []; hourStartTime = Date.now();
+      } catch (e) {}
+    }
+
+    // --- 4.5 Secret Admin Modal Logic ---
+    const secretTrigger = document.getElementById('secret-admin-trigger');
+    const adminModal = document.getElementById('admin-modal');
+    const closeAdminModal = document.getElementById('close-admin-modal');
+
+    // إظهار النافذة عند الضغط على الكلمة السرية
+    secretTrigger.addEventListener('click', () => {
+      adminModal.classList.remove('hidden');
+    });
+
+    // إخفاء النافذة عند الضغط على زر الإغلاق X
+    closeAdminModal.addEventListener('click', () => {
+      adminModal.classList.add('hidden');
+    });
+
+    // --- 5. Admin Authentication & Control Logic ---
+    const loginSection = document.getElementById('admin-login-section');
+    const controlsSection = document.getElementById('admin-controls-section');
+    const loginError = document.getElementById('login-error');
     
-    // جلب الإعدادات من Firestore عند تسجيل الدخول
+    // متغير يحمل حالة الجهاز المطلوبة
+    let currentAdminConfig = { pump_mode: "AUTO", locked: false };
+
+    // مراقبة حالة تسجيل الدخول
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loginSection.classList.add('hidden');
+        controlsSection.classList.remove('hidden');
+        fetchCurrentAdminConfig(); // جلب آخر إعدادات من القاعدة
+      } else {
+        loginSection.classList.remove('hidden');
+        controlsSection.classList.add('hidden');
+      }
+    });
+
+    // تسجيل الدخول
+    document.getElementById('btn-login').addEventListener('click', () => {
+      const email = document.getElementById('admin-email').value;
+      const pass = document.getElementById('admin-password').value;
+      loginError.classList.add('hidden');
+      signInWithEmailAndPassword(auth, email, pass).catch(err => {
+        loginError.innerText = "فشل تسجيل الدخول. تأكد من البريد الإلكتروني وكلمة المرور.";
+        loginError.classList.remove('hidden');
+      });
+    });
+
+    // تسجيل الخروج
+    document.getElementById('btn-logout').addEventListener('click', () => signOut(auth));
+
+    // جلب آخر حالة تم حفظها للأدمن من Firestore
     async function fetchCurrentAdminConfig() {
       try {
         const docSnap = await getDoc(doc(db, "devices", "water-treatment-01-config"));
         if (docSnap.exists()) {
           currentAdminConfig = docSnap.data();
         }
-      } catch(e) { console.error("Fetch config error", e); }
+      } catch(e) { console.error("Error fetching config", e); }
     }
 
-    // دوال إرسال الأوامر (تكتب في Firebase، وتُرسل كـ Retained Message)
-    // Retain: true يعني أن السيرفر سيحتفظ بها وسيرسلها فوراً للـ ESP32 بمجرد اتصاله حتى بعد انقطاع الكهرباء
+    // الدوال التي سيتم استدعاؤها من أزرار الـ HTML
     window.sendControl = async function(mode) {
-      if(!auth.currentUser) return alert("سجل الدخول أولاً");
+      if(!auth.currentUser) return alert("الرجاء تسجيل الدخول أولاً.");
       currentAdminConfig.pump_mode = mode;
       await syncAdminConfig();
     };
 
     window.sendLock = async function(isLocked) {
-      if(!auth.currentUser) return alert("سجل الدخول أولاً");
+      if(!auth.currentUser) return alert("الرجاء تسجيل الدخول أولاً.");
       currentAdminConfig.locked = isLocked;
       await syncAdminConfig();
     };
 
+    // مزامنة الأمر مع Firestore (للحفظ) و MQTT (للتنفيذ)
     async function syncAdminConfig() {
-      // 1. حفظ في Firebase (كقاعدة بيانات احتياطية للأدمن)
       try {
+        // حفظ في فايربيز للرجوع إليها
         await setDoc(doc(db, "devices", "water-treatment-01-config"), currentAdminConfig);
       } catch(e) { console.error(e); }
       
-      // 2. إرسال أمر الـ MQTT للـ ESP32 مع تفعيل (Retain = true) للعمل كأمر محفوظ
+      // إرسال الأمر للـ ESP32 مع تفعيل (retain: true) ليتم حفظه في سيرفر HiveMQ
+      // هذا يضمن أن الـ ESP32 سيستلم الأمر حتى لو كان مفصولاً عن الكهرباء وعاد للعمل لاحقاً
       mqttClient.publish(CONTROL_TOPIC, JSON.stringify(currentAdminConfig), { retain: true });
-      alert("تم إرسال الأمر للنظام بنجاح.");
+      alert("تم إرسال الأمر بنجاح وحفظه في السيرفر.");
     }
+
+    // --- 6. CSV Export Feature ---
+    document.getElementById('export-csv').addEventListener('click', async () => {
+      const btn = document.getElementById('export-csv');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = "Exporting..."; btn.disabled = true;
+      try {
+        const querySnapshot = await getDocs(collection(db, "devices/water-treatment-01/hourlyReadings"));
+        let csvContent = "data:text/csv;charset=utf-8,Timestamp,Device,TDS Avg (ppm),Turbidity Avg (NTU),Samples\n";
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          const dateStr = data.timestamp ? data.timestamp.toDate().toLocaleString() : "N/A";
+          csvContent += `"${dateStr}","${data.deviceId}",${data.tdsAverage},${data.turbidityAverage},${data.sampleCount}\n`;
+        });
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "water_treatment_history.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (error) {
+        alert("Failed to export data.");
+      } finally {
+        btn.innerHTML = originalText; btn.disabled = false;
+      }
+    });
   </script>
 </body>
 </html>
